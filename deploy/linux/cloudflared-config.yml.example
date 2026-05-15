@@ -1,0 +1,7 @@
+tunnel: SISTEMA_COTIZACIONES_TUNNEL_ID
+credentials-file: /etc/cloudflared/SISTEMA_COTIZACIONES_TUNNEL_ID.json
+
+ingress:
+  - hostname: cotizaciones.jahmantencion.cl
+    service: http://127.0.0.1:5082
+  - service: http_status:404

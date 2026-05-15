@@ -1,0 +1,830 @@
+@page "/nueva-cotizacion"
+@page "/cotizaciones/editar/{VersionId:int}"
+@attribute [Authorize]
+@inject ClienteService ClienteService
+@inject CotizacionService CotizacionService
+@inject OpcionCotizacionService OpcionCotizacionService
+@inject ChileGeoService ChileGeoService
+@inject NavigationManager NavigationManager
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@using SistemaCotizaciones.Web.Components.Pages.Dialogs
+
+<PageTitle>JAH - @TituloPagina</PageTitle>
+
+<div class="page-header">
+    <div>
+        <MudText Typo="Typo.h4">@TituloPagina</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@SubtituloPagina</MudText>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else
+{
+@if (_editando)
+{
+    <MudPaper Class="section-surface version-history" Elevation="0">
+        <div class="section-title-row">
+            <div>
+                <MudText Typo="Typo.h6">Historial de versiones</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @(_version.Estado == EstadoCotizacion.Borrador
+                        ? "Este borrador se actualizara sobre la misma version hasta que sea emitido."
+                        : "Al guardar cambios se creara una nueva version y se conservara esta version en el historial.")
+                </MudText>
+            </div>
+            <MudChip T="string" Color="@ColorEstado(_version)" Variant="Variant.Filled">@TextoEstado(_version)</MudChip>
+        </div>
+        <div class="version-chip-list">
+            @foreach (var version in _historialVersiones)
+            {
+                <MudChip T="string"
+                         Color="@(version.Id == VersionId ? Color.Primary : Color.Default)"
+                         Variant="@(version.Id == VersionId ? Variant.Filled : Variant.Outlined)"
+                         Href="@($"/cotizaciones/editar/{version.Id}")">
+                    @version.NumeroCotizacion
+                </MudChip>
+            }
+        </div>
+    </MudPaper>
+}
+
+<MudPaper Class="section-surface" Elevation="0">
+    <MudText Typo="Typo.h6">Buscar cliente</MudText>
+    <MudGrid Class="mt-1">
+        <MudItem xs="12" md="9">
+            <MudAutocomplete T="Cliente"
+                             Value="_clienteSeleccionado"
+                             ValueChanged="SeleccionarClienteAutocomplete"
+                             SearchFunc="BuscarClientesAutocomplete"
+                             ToStringFunc="ClienteTexto"
+                             Placeholder="Buscar cliente por nombre, RUT, direccion, region, comuna, ciudad, email o telefono"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             AdornmentIcon="@Icons.Material.Filled.Search"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             Dense="true" />
+        </MudItem>
+        <MudItem xs="12" md="3" Class="d-flex gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" OnClick="BuscarClientes">Buscar</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Primary" FullWidth="true" OnClick="NuevoCliente">Nuevo</MudButton>
+        </MudItem>
+    </MudGrid>
+
+    @if (_clientesEncontrados.Count > 0)
+    {
+        <MudList T="Cliente" Dense="true" Class="search-results">
+            @foreach (var cliente in _clientesEncontrados)
+            {
+                <MudListItem T="Cliente" Value="cliente" OnClick="@(() => SeleccionarCliente(cliente))">
+                    <div>
+                        <MudText Typo="Typo.body2"><b>@cliente.RazonSocial</b> | @cliente.Rut</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@cliente.Direccion, @cliente.Comuna, @cliente.Ciudad, @cliente.Region</MudText>
+                    </div>
+                </MudListItem>
+            }
+        </MudList>
+    }
+</MudPaper>
+
+<MudPaper Class="section-surface" Elevation="0">
+    <MudText Typo="Typo.h6">Datos del cliente</MudText>
+    <MudGrid Class="mt-1">
+        <MudItem xs="12" md="3"><MudTextField @bind-Value="_cliente.Rut" Label="RUT" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" md="5"><MudTextField @bind-Value="_cliente.RazonSocial" Label="Razon social" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" /></MudItem>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_cliente.Direccion" Label="Direccion" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" md="3">
+            <MudAutocomplete T="string"
+                             Value="_cliente.Region"
+                             ValueChanged="RegionClienteChanged"
+                             SearchFunc="BuscarRegiones"
+                             Label="Region"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Dense="true"
+                             CoerceText="true"
+                             MaxItems="80" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudAutocomplete T="string"
+                             Value="_cliente.Comuna"
+                             ValueChanged="ComunaClienteChanged"
+                             SearchFunc="BuscarComunasCliente"
+                             Label="Comuna"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Dense="true"
+                             CoerceText="true"
+                             MaxItems="80" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudAutocomplete T="string"
+                             @bind-Value="_cliente.Ciudad"
+                             SearchFunc="BuscarCiudadesCliente"
+                             Label="Ciudad"
+                             Variant="Variant.Outlined"
+                             Margin="Margin.Dense"
+                             Dense="true"
+                             CoerceText="true"
+                             MaxItems="80" />
+        </MudItem>
+        <MudItem xs="12" md="3"><MudTextField @bind-Value="_cliente.TipoCliente" Label="Tipo cliente" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" md="3"><MudTextField @bind-Value="_cliente.Sucursal" Label="Sucursal" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_cliente.Vendedor" Label="Vendedor" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_cliente.Telefono" Label="Telefono" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_cliente.Email" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudPaper Class="section-surface quote-lines" Elevation="0">
+    <div class="section-title-row">
+        <MudText Typo="Typo.h6">Lineas de cotizacion</MudText>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AgregarLinea">Agregar linea</MudButton>
+    </div>
+
+    <MudTable Items="_version.Lineas" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Linea</MudTh>
+            <MudTh>Articulo</MudTh>
+            <MudTh>Descripcion</MudTh>
+            <MudTh>Categoria</MudTh>
+            <MudTh>Cantidad</MudTh>
+            <MudTh>Precio</MudTh>
+            <MudTh>Desc. %</MudTh>
+            <MudTh>Total</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Linea">@context.NumeroLinea</MudTd>
+            <MudTd DataLabel="Articulo"><MudTextField @bind-Value="context.NombreArticulo" Variant="Variant.Text" Margin="Margin.Dense" OnKeyDown="AgregarConCtrlEnter" /></MudTd>
+            <MudTd DataLabel="Descripcion"><MudTextField @bind-Value="context.Descripcion" Variant="Variant.Text" Margin="Margin.Dense" /></MudTd>
+            <MudTd DataLabel="Categoria">
+                <MudAutocomplete T="string"
+                                 Value="context.Categoria"
+                                 ValueChanged="@((string? value) => context.Categoria = value ?? string.Empty)"
+                                 SearchFunc="BuscarCategorias"
+                                 Variant="Variant.Text"
+                                 Margin="Margin.Dense"
+                                 Dense="true"
+                                 CoerceText="true"
+                                 MaxItems="80">
+                    <AfterItemsTemplate>
+                        <div class="autocomplete-add-row">
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       OnClick="@(() => AgregarCategoria(context))">
+                                Añadir categoria
+                            </MudButton>
+                        </div>
+                    </AfterItemsTemplate>
+                    <NoItemsTemplate>
+                        <div class="autocomplete-add-row">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="px-3 pt-2">Sin resultados</MudText>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Add"
+                                       OnClick="@(() => AgregarCategoria(context))">
+                                Añadir categoria
+                            </MudButton>
+                        </div>
+                    </NoItemsTemplate>
+                </MudAutocomplete>
+            </MudTd>
+            <MudTd DataLabel="Cantidad"><MudNumericField @bind-Value="context.Cantidad" Min="0" Format="N0" Variant="Variant.Text" Margin="Margin.Dense" /></MudTd>
+            <MudTd DataLabel="Precio"><MudNumericField @bind-Value="context.PrecioUnitario" Min="0" Format="N0" Variant="Variant.Text" Margin="Margin.Dense" /></MudTd>
+            <MudTd DataLabel="Desc. %"><MudNumericField @bind-Value="context.DescuentoPorcentaje" Min="0" Max="100" Format="N0" Variant="Variant.Text" Margin="Margin.Dense" /></MudTd>
+            <MudTd DataLabel="Total">@Moneda(context.TotalLinea)</MudTd>
+            <MudTd><MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => EliminarLinea(context))" /></MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudPaper>
+
+<MudGrid>
+    <MudItem xs="12" lg="7">
+        <MudPaper Class="section-surface" Elevation="0">
+            <MudText Typo="Typo.h6">Consideraciones generales</MudText>
+            <MudGrid Class="mt-1">
+                <MudItem xs="12" md="6">
+                    <div class="inline-option-field">
+                        <MudAutocomplete T="string"
+                                         @bind-Value="_version.FormaPago"
+                                         SearchFunc="BuscarFormasPago"
+                                         Label="Forma de pago"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Dense="true"
+                                         CoerceText="true"
+                                         MaxItems="80" />
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="AgregarFormaPago">Añadir</MudButton>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <div class="inline-option-field">
+                        <MudAutocomplete T="string"
+                                         @bind-Value="_version.CuentaCorriente"
+                                         SearchFunc="BuscarCuentasCorrientes"
+                                         Label="Cuenta corriente"
+                                         Variant="Variant.Outlined"
+                                         Margin="Margin.Dense"
+                                         Dense="true"
+                                         CoerceText="true"
+                                         MaxItems="80" />
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="AgregarCuentaCorriente">Añadir</MudButton>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <div class="duration-field">
+                        <MudTextField T="string"
+                                      Value="_plazoEntregaCantidad"
+                                      ValueChanged="PlazoEntregaCantidadChanged"
+                                      Label="Plazo entrega"
+                                      InputType="InputType.Number"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                        <MudSelect T="string"
+                                   Value="_plazoEntregaUnidad"
+                                   ValueChanged="PlazoEntregaUnidadChanged"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense">
+                            @foreach (var unidad in UnidadesTiempo)
+                            {
+                                <MudSelectItem Value="@unidad">@unidad</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudAutocomplete T="string"
+                                     @bind-Value="_version.Moneda"
+                                     SearchFunc="BuscarMonedas"
+                                     Label="Moneda"
+                                     Variant="Variant.Outlined"
+                                     Margin="Margin.Dense"
+                                     Dense="true"
+                                     CoerceText="true"
+                                     MaxItems="80" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <div class="duration-field">
+                        <MudTextField T="string"
+                                      Value="_validezOfertaCantidad"
+                                      ValueChanged="ValidezOfertaCantidadChanged"
+                                      Label="Validez oferta"
+                                      InputType="InputType.Number"
+                                      Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" />
+                        <MudSelect T="string"
+                                   Value="_validezOfertaUnidad"
+                                   ValueChanged="ValidezOfertaUnidadChanged"
+                                   Variant="Variant.Outlined"
+                                   Margin="Margin.Dense">
+                            @foreach (var unidad in UnidadesTiempo)
+                            {
+                                <MudSelectItem Value="@unidad">@unidad</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
+                </MudItem>
+                <MudItem xs="12"><MudTextField @bind-Value="_version.Comentarios" Label="Comentarios" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" /></MudItem>
+            </MudGrid>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" lg="5">
+        <MudPaper Class="section-surface totals-panel" Elevation="0">
+            <MudText Typo="Typo.h6">Totales</MudText>
+            <MudSelect @bind-Value="_version.TipoVenta" Label="Tipo de venta" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="TipoVenta.Nacional">Nacional</MudSelectItem>
+                <MudSelectItem Value="TipoVenta.Internacional">Internacional</MudSelectItem>
+            </MudSelect>
+            <MudNumericField @bind-Value="_version.DescuentoGlobalPorcentaje" Label="Descuento global %" Min="0" Max="100" Format="N0" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <div class="total-row"><span>Subtotal</span><b>@Moneda(_version.Subtotal)</b></div>
+            <div class="total-row"><span>Descuento global</span><b>@Moneda(_version.DescuentoGlobal)</b></div>
+            <div class="total-row"><span>Total neto</span><b>@Moneda(_version.Neto)</b></div>
+            <div class="total-row"><span>IVA</span><b>@Moneda(_version.Iva)</b></div>
+            <div class="total-row final"><span>Total final</span><b>@Moneda(_version.Total)</b></div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudPaper Class="quote-action-bar" Elevation="0">
+    <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.Close" OnClick="@(() => NavigationManager.NavigateTo("/cotizaciones"))">Salir</MudButton>
+    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Drafts" OnClick="GuardarBorrador">Guardar borrador</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="@(() => Guardar(EstadoCotizacion.Pendiente))">@TextoBotonGuardar</MudButton>
+</MudPaper>
+}
+
+@code {
+    [Parameter] public int? VersionId { get; set; }
+
+    private string _busquedaCliente = string.Empty;
+    private Cliente? _clienteSeleccionado;
+    private List<Cliente> _clientesEncontrados = new();
+    private Cliente _cliente = new();
+    private bool _loading;
+    private bool _editando;
+    private bool _versionOriginalAprobada;
+    private List<CotizacionVersion> _historialVersiones = new();
+    private List<string> _categorias = new();
+    private List<string> _formasPago = new();
+    private List<string> _cuentasCorrientes = new();
+    private static readonly List<string> MonedasDisponibles = ["CLP", "USD", "EUR", "UF", "UTM", "ARS"];
+    private static readonly List<string> UnidadesTiempo = ["días", "meses", "años"];
+    private string _plazoEntregaCantidad = string.Empty;
+    private string _plazoEntregaUnidad = "días";
+    private string _validezOfertaCantidad = string.Empty;
+    private string _validezOfertaUnidad = "días";
+    private CotizacionVersion _version = new()
+    {
+        Lineas = new List<CotizacionLinea>
+        {
+            new() { NumeroLinea = 1 }
+        }
+    };
+
+    private string TituloPagina => _editando ? $"Editar {_version.NumeroCotizacion}" : "Nueva cotizacion";
+    private string SubtituloPagina => _editando
+        ? "Edita la cotizacion y conserva el historial completo de versiones."
+        : "Crea clientes y cotizaciones en el mismo flujo.";
+    private string TextoBotonGuardar => _editando
+        ? (_version.Estado == EstadoCotizacion.Borrador ? "Emitir cotizacion" : "Guardar como nueva version")
+        : "Guardar cotizacion";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarOpciones();
+        _version.Moneda = string.IsNullOrWhiteSpace(_version.Moneda) ? "CLP" : _version.Moneda;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (VersionId is null || _editando)
+        {
+            return;
+        }
+
+        _loading = true;
+        var version = await CotizacionService.ObtenerVersion(VersionId.Value);
+        if (version is null)
+        {
+            Snackbar.Add("Cotizacion no encontrada o sin permisos.", Severity.Warning);
+            NavigationManager.NavigateTo("/cotizaciones");
+            return;
+        }
+
+        _editando = true;
+        _versionOriginalAprobada = version.EsAprobada;
+        _cliente = version.Cotizacion.Cliente is null ? new Cliente() : ClonarCliente(version.Cotizacion.Cliente);
+        _version = ClonarVersion(version);
+        CargarDuracionesDesdeVersion();
+        _historialVersiones = version.Cotizacion.Versiones.OrderBy(x => x.Version).ToList();
+        _loading = false;
+    }
+
+    private async Task BuscarClientes()
+    {
+        _clientesEncontrados = await ClienteService.Buscar(_busquedaCliente);
+    }
+
+    private async Task<IEnumerable<Cliente>> BuscarClientesAutocomplete(string value, CancellationToken cancellationToken)
+    {
+        _busquedaCliente = value ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(_busquedaCliente) || _busquedaCliente.Trim().Length < 2)
+        {
+            return Array.Empty<Cliente>();
+        }
+
+        return await ClienteService.Buscar(_busquedaCliente);
+    }
+
+    private Task SeleccionarClienteAutocomplete(Cliente? cliente)
+    {
+        if (cliente is not null)
+        {
+            SeleccionarCliente(cliente);
+        }
+
+        _clienteSeleccionado = cliente;
+        return Task.CompletedTask;
+    }
+
+    private static string ClienteTexto(Cliente? cliente)
+    {
+        return cliente is null ? string.Empty : $"{cliente.RazonSocial} | {cliente.Rut}";
+    }
+
+    private async Task BuscarClienteConEnter(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await BuscarClientes();
+        }
+    }
+
+    private void SeleccionarCliente(Cliente cliente)
+    {
+        _cliente = new Cliente
+        {
+            Id = cliente.Id,
+            Rut = cliente.Rut,
+            RazonSocial = cliente.RazonSocial,
+            Direccion = cliente.Direccion,
+            Region = cliente.Region,
+            Comuna = cliente.Comuna,
+            Ciudad = cliente.Ciudad,
+            TipoCliente = cliente.TipoCliente,
+            Sucursal = cliente.Sucursal,
+            Vendedor = cliente.Vendedor,
+            Email = cliente.Email,
+            Telefono = cliente.Telefono
+        };
+        _clientesEncontrados.Clear();
+    }
+
+    private Task<IEnumerable<string>> BuscarRegiones(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ChileGeoService.BuscarRegiones(value));
+    }
+
+    private Task<IEnumerable<string>> BuscarComunasCliente(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ChileGeoService.BuscarComunas(_cliente.Region, value));
+    }
+
+    private Task<IEnumerable<string>> BuscarCiudadesCliente(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ChileGeoService.BuscarCiudades(_cliente.Region, _cliente.Comuna, value));
+    }
+
+    private Task RegionClienteChanged(string? region)
+    {
+        _cliente.Region = region ?? string.Empty;
+        if (!ChileGeoService.ComunaPerteneceARegion(_cliente.Region, _cliente.Comuna))
+        {
+            _cliente.Comuna = string.Empty;
+            _cliente.Ciudad = string.Empty;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task ComunaClienteChanged(string? comuna)
+    {
+        _cliente.Comuna = comuna ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(_cliente.Comuna))
+        {
+            _cliente.Ciudad = _cliente.Comuna;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void NuevoCliente()
+    {
+        _cliente = new Cliente();
+        _clientesEncontrados.Clear();
+    }
+
+    private void AgregarLinea()
+    {
+        _version.Lineas.Add(new CotizacionLinea { NumeroLinea = _version.Lineas.Count + 1, Cantidad = 1 });
+    }
+
+    private void AgregarConCtrlEnter(KeyboardEventArgs args)
+    {
+        if (args.CtrlKey && args.Key == "Enter")
+        {
+            AgregarLinea();
+        }
+    }
+
+    private async Task CargarOpciones()
+    {
+        _categorias = await OpcionCotizacionService.ObtenerCategorias();
+        _formasPago = await OpcionCotizacionService.ObtenerFormasPago();
+        _cuentasCorrientes = await OpcionCotizacionService.ObtenerCuentasCorrientes();
+    }
+
+    private Task<IEnumerable<string>> BuscarCategorias(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(FiltrarOpciones(_categorias, value));
+    }
+
+    private Task<IEnumerable<string>> BuscarFormasPago(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(FiltrarOpciones(_formasPago, value));
+    }
+
+    private Task<IEnumerable<string>> BuscarCuentasCorrientes(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(FiltrarOpciones(_cuentasCorrientes, value));
+    }
+
+    private Task<IEnumerable<string>> BuscarMonedas(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(FiltrarOpciones(MonedasDisponibles, value));
+    }
+
+    private async Task AgregarCategoria(CotizacionLinea linea)
+    {
+        var nombre = await SolicitarTexto("Añadir categoria", "Nombre de categoria", linea.Categoria);
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return;
+        }
+
+        try
+        {
+            linea.Categoria = await OpcionCotizacionService.AgregarCategoria(nombre);
+            await CargarOpciones();
+            Snackbar.Add("Categoria guardada.", Severity.Success);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task AgregarFormaPago()
+    {
+        var nombre = await SolicitarTexto("Añadir forma de pago", "Forma de pago", _version.FormaPago);
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return;
+        }
+
+        try
+        {
+            _version.FormaPago = await OpcionCotizacionService.AgregarFormaPago(nombre);
+            await CargarOpciones();
+            Snackbar.Add("Forma de pago guardada.", Severity.Success);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task AgregarCuentaCorriente()
+    {
+        var nombre = await SolicitarTexto("Añadir cuenta corriente", "Cuenta corriente", _version.CuentaCorriente);
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return;
+        }
+
+        try
+        {
+            _version.CuentaCorriente = await OpcionCotizacionService.AgregarCuentaCorriente(nombre);
+            await CargarOpciones();
+            Snackbar.Add("Cuenta corriente guardada.", Severity.Success);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task<string?> SolicitarTexto(string titulo, string etiqueta, string valorInicial)
+    {
+        var parameters = new DialogParameters<DialogTextoSimple>
+        {
+            { x => x.Titulo, titulo },
+            { x => x.Etiqueta, etiqueta },
+            { x => x.Valor, valorInicial }
+        };
+        var dialog = await DialogService.ShowAsync<DialogTextoSimple>(titulo, parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false } ? result.Data?.ToString() : null;
+    }
+
+    private static IEnumerable<string> FiltrarOpciones(IEnumerable<string> opciones, string value)
+    {
+        value ??= string.Empty;
+        return opciones
+            .Where(x => string.IsNullOrWhiteSpace(value) || x.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x)
+            .Take(80);
+    }
+
+    private async Task EliminarLinea(CotizacionLinea linea)
+    {
+        var parameters = new DialogParameters<DialogConfirmar>
+        {
+            { x => x.Titulo, "Eliminar linea" },
+            { x => x.Mensaje, "Desea eliminar esta linea?" },
+            { x => x.TextoConfirmar, "Eliminar" }
+        };
+        var dialog = await DialogService.ShowAsync<DialogConfirmar>("Confirmar", parameters);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false } && result.Data is true)
+        {
+            _version.Lineas.Remove(linea);
+            for (var i = 0; i < _version.Lineas.Count; i++)
+            {
+                _version.Lineas[i].NumeroLinea = i + 1;
+            }
+        }
+    }
+
+    private Task PlazoEntregaCantidadChanged(string value)
+    {
+        _plazoEntregaCantidad = value;
+        ActualizarDuracionPlazo();
+        return Task.CompletedTask;
+    }
+
+    private Task PlazoEntregaUnidadChanged(string value)
+    {
+        _plazoEntregaUnidad = value;
+        ActualizarDuracionPlazo();
+        return Task.CompletedTask;
+    }
+
+    private Task ValidezOfertaCantidadChanged(string value)
+    {
+        _validezOfertaCantidad = value;
+        ActualizarDuracionValidez();
+        return Task.CompletedTask;
+    }
+
+    private Task ValidezOfertaUnidadChanged(string value)
+    {
+        _validezOfertaUnidad = value;
+        ActualizarDuracionValidez();
+        return Task.CompletedTask;
+    }
+
+    private void CargarDuracionesDesdeVersion()
+    {
+        (_plazoEntregaCantidad, _plazoEntregaUnidad) = SepararDuracion(_version.PlazoEntrega);
+        (_validezOfertaCantidad, _validezOfertaUnidad) = SepararDuracion(_version.ValidezOferta);
+    }
+
+    private void ActualizarDuracionPlazo()
+    {
+        _version.PlazoEntrega = FormatearDuracion(_plazoEntregaCantidad, _plazoEntregaUnidad);
+    }
+
+    private void ActualizarDuracionValidez()
+    {
+        _version.ValidezOferta = FormatearDuracion(_validezOfertaCantidad, _validezOfertaUnidad);
+    }
+
+    private static (string Cantidad, string Unidad) SepararDuracion(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (string.Empty, "días");
+        }
+
+        var partes = value.Trim().Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 2 && UnidadesTiempo.Contains(partes[1], StringComparer.OrdinalIgnoreCase))
+        {
+            return (partes[0], partes[1]);
+        }
+
+        return (value, "días");
+    }
+
+    private static string FormatearDuracion(string cantidad, string unidad)
+    {
+        cantidad = cantidad.Trim();
+        return string.IsNullOrWhiteSpace(cantidad) ? string.Empty : $"{cantidad} {unidad}";
+    }
+
+    private Task GuardarBorrador()
+    {
+        return Guardar(EstadoCotizacion.Borrador);
+    }
+
+    private async Task Guardar(EstadoCotizacion estado)
+    {
+        if (string.IsNullOrWhiteSpace(_cliente.RazonSocial))
+        {
+            Snackbar.Add("Debe seleccionar o crear un cliente.", Severity.Warning);
+            return;
+        }
+
+        if (estado != EstadoCotizacion.Borrador &&
+            !_version.Lineas.Any(x => !string.IsNullOrWhiteSpace(x.NombreArticulo) || !string.IsNullOrWhiteSpace(x.Descripcion)))
+        {
+            Snackbar.Add("Debe ingresar al menos una linea de cotizacion.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            if (_editando && VersionId is not null)
+            {
+                var resultado = await CotizacionService.GuardarEdicionVersion(VersionId.Value, _cliente, _version, estado);
+                Snackbar.Add(
+                    resultado.CreoNuevaVersion
+                        ? $"Se creo {resultado.Version.NumeroCotizacion} y se genero su PDF."
+                        : $"Se actualizaron los cambios de {resultado.Version.NumeroCotizacion} y se regenero su PDF.",
+                    Severity.Success);
+                NavigationManager.NavigateTo("/cotizaciones");
+                return;
+            }
+
+            var guardada = await CotizacionService.CrearNuevaVersion(_cliente, _version, estado);
+            Snackbar.Add(
+                estado == EstadoCotizacion.Borrador
+                    ? $"Borrador {guardada.NumeroCotizacion} guardado."
+                    : $"Cotizacion {guardada.NumeroCotizacion} guardada y PDF generado.",
+                Severity.Success);
+            NavigationManager.NavigateTo("/cotizaciones");
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private static string Moneda(decimal valor) => valor.ToString("C0", new System.Globalization.CultureInfo("es-CL"));
+
+    private static Cliente ClonarCliente(Cliente cliente)
+    {
+        return new Cliente
+        {
+            Id = cliente.Id,
+            Rut = cliente.Rut,
+            RazonSocial = cliente.RazonSocial,
+            Direccion = cliente.Direccion,
+            Region = cliente.Region,
+            Comuna = cliente.Comuna,
+            Ciudad = cliente.Ciudad,
+            TipoCliente = cliente.TipoCliente,
+            Sucursal = cliente.Sucursal,
+            Vendedor = cliente.Vendedor,
+            Email = cliente.Email,
+            Telefono = cliente.Telefono
+        };
+    }
+
+    private static CotizacionVersion ClonarVersion(CotizacionVersion version)
+    {
+        return new CotizacionVersion
+        {
+            Id = version.Id,
+            CotizacionId = version.CotizacionId,
+            Version = version.Version,
+            NumeroCotizacion = version.NumeroCotizacion,
+            Estado = version.Estado,
+            EsAprobada = version.EsAprobada,
+            TipoVenta = version.TipoVenta,
+            DescuentoGlobalPorcentaje = version.DescuentoGlobalPorcentaje,
+            FormaPago = version.FormaPago,
+            CuentaCorriente = version.CuentaCorriente,
+            PlazoEntrega = version.PlazoEntrega,
+            Moneda = version.Moneda,
+            ValidezOferta = version.ValidezOferta,
+            Comentarios = version.Comentarios,
+            Lineas = version.Lineas
+                .OrderBy(x => x.NumeroLinea)
+                .Select(x => new CotizacionLinea
+                {
+                    NumeroLinea = x.NumeroLinea,
+                    NombreArticulo = x.NombreArticulo,
+                    Descripcion = x.Descripcion,
+                    Categoria = x.Categoria,
+                    Cantidad = x.Cantidad,
+                    PrecioUnitario = x.PrecioUnitario,
+                    DescuentoPorcentaje = x.DescuentoPorcentaje
+                })
+                .ToList()
+        };
+    }
+
+    private static Color ColorEstado(CotizacionVersion version)
+    {
+        return version.Estado switch
+        {
+            EstadoCotizacion.Aprobada => Color.Success,
+            EstadoCotizacion.Rechazada => Color.Error,
+            EstadoCotizacion.Borrador => Color.Info,
+            _ => Color.Warning
+        };
+    }
+
+    private static string TextoEstado(CotizacionVersion version)
+    {
+        return version.Estado switch
+        {
+            EstadoCotizacion.Aprobada => "Aprobada",
+            EstadoCotizacion.Rechazada => "Rechazada",
+            EstadoCotizacion.Borrador => "Borrador",
+            _ => "Pendiente"
+        };
+    }
+}

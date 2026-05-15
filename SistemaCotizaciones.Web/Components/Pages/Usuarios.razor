@@ -1,0 +1,129 @@
+@page "/usuarios"
+@attribute [Authorize(Roles = "Admin")]
+@using SistemaCotizaciones.Web.Components.Pages.Dialogs
+@inject UsuarioAdminService UsuarioAdminService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>JAH - Usuarios</PageTitle>
+
+<div class="page-header">
+    <div>
+        <MudText Typo="Typo.h4">Usuarios</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Administra vendedores, roles y accesos del sistema.</MudText>
+    </div>
+    <div class="header-actions">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="CrearUsuario">
+            Nuevo usuario
+        </MudButton>
+    </div>
+</div>
+
+<MudTable Items="_usuarios" Hover="true" Dense="true" Loading="_loading" Class="data-table">
+    <HeaderContent>
+        <MudTh>Usuario</MudTh>
+        <MudTh>Nombre</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Rol</MudTh>
+        <MudTh>Estado</MudTh>
+        <MudTh>Acciones</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Usuario">
+            <MudText Typo="Typo.body2"><b>@context.UserName</b></MudText>
+        </MudTd>
+        <MudTd DataLabel="Nombre">
+            <MudText Typo="Typo.body2">@context.NombreCompleto</MudText>
+        </MudTd>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="Rol">@context.RolesTexto</MudTd>
+        <MudTd DataLabel="Estado">
+            <MudChip T="string" Color="@(context.Activo ? Color.Success : Color.Error)" Variant="Variant.Filled" Size="Size.Small">
+                @(context.Activo ? "Activo" : "Inactivo")
+            </MudChip>
+        </MudTd>
+        <MudTd DataLabel="Acciones">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => EditarUsuario(context.Id))" />
+            @if (context.Activo)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Block" Color="Color.Warning" Size="Size.Small" OnClick="@(() => CambiarEstado(context.Id, false))" />
+            }
+            else
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" OnClick="@(() => CambiarEstado(context.Id, true))" />
+            }
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<UsuarioListado> _usuarios = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Cargar();
+    }
+
+    private async Task Cargar()
+    {
+        _loading = true;
+        _usuarios = await UsuarioAdminService.ObtenerTodos();
+        _loading = false;
+    }
+
+    private async Task CrearUsuario()
+    {
+        await AbrirDialogo(new UsuarioEditor());
+    }
+
+    private async Task EditarUsuario(string id)
+    {
+        var usuario = await UsuarioAdminService.ObtenerParaEditar(id);
+        if (usuario is null)
+        {
+            Snackbar.Add("Usuario no encontrado.", Severity.Warning);
+            return;
+        }
+
+        await AbrirDialogo(usuario);
+    }
+
+    private async Task AbrirDialogo(UsuarioEditor usuario)
+    {
+        var parameters = new DialogParameters<DialogUsuario> { { x => x.Usuario, usuario } };
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<DialogUsuario>("Usuario", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not { Canceled: false } || result.Data is not UsuarioEditor editor)
+        {
+            return;
+        }
+
+        try
+        {
+            await UsuarioAdminService.Guardar(editor);
+            Snackbar.Add("Usuario guardado correctamente.", Severity.Success);
+            await Cargar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task CambiarEstado(string id, bool activo)
+    {
+        try
+        {
+            await UsuarioAdminService.CambiarEstado(id, activo);
+            Snackbar.Add(activo ? "Usuario activado." : "Usuario desactivado.", Severity.Info);
+            await Cargar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

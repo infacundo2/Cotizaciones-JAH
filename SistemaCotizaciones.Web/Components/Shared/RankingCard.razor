@@ -1,0 +1,30 @@
+@namespace SistemaCotizaciones.Web.Components.Shared
+
+<MudPaper Class="ranking-card" Elevation="0">
+    <MudText Typo="Typo.h6">@Titulo</MudText>
+
+    @if (Items.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">Sin datos todavia.</MudText>
+    }
+    else
+    {
+        <MudTable Items="Items" Dense="true" Hover="true" Class="mt-3">
+            <HeaderContent>
+                <MudTh>Cliente</MudTh>
+                <MudTh>Cantidad</MudTh>
+                <MudTh>Monto</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Cliente">@context.NombreCliente</MudTd>
+                <MudTd DataLabel="Cantidad">@context.Cantidad</MudTd>
+                <MudTd DataLabel="Monto">@context.MontoTotal.ToString("C0", new System.Globalization.CultureInfo("es-CL"))</MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = string.Empty;
+    [Parameter] public List<RankingCliente> Items { get; set; } = new();
+}

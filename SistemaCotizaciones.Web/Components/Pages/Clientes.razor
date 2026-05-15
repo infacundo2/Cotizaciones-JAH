@@ -1,0 +1,173 @@
+@page "/clientes"
+@attribute [Authorize]
+@using SistemaCotizaciones.Web.Components.Pages.Dialogs
+@inject ClienteService ClienteService
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>JAH - Clientes</PageTitle>
+
+<div class="page-header">
+    <div>
+        <MudText Typo="Typo.h4">Clientes</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Busca, edita y revisa el historial comercial.</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="CrearCliente">
+        Nuevo cliente
+    </MudButton>
+</div>
+
+<MudPaper Class="toolbar-surface" Elevation="0">
+    <MudTextField @bind-Value="_busqueda"
+                  Placeholder="Buscar por RUT, razon social, region, comuna, ciudad, email o telefono"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true"
+                  OnKeyDown="BuscarConEnter" />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="Buscar">Buscar</MudButton>
+</MudPaper>
+
+<MudTable Items="_clientes" Hover="true" Breakpoint="Breakpoint.Sm" Loading="_loading" Dense="true" Class="data-table">
+    <HeaderContent>
+        <MudTh>RUT</MudTh>
+        <MudTh>Razon social</MudTh>
+        <MudTh>Region</MudTh>
+        <MudTh>Ciudad</MudTh>
+        <MudTh>Telefono</MudTh>
+        <MudTh>Email</MudTh>
+        <MudTh>Acciones</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="RUT">@context.Rut</MudTd>
+        <MudTd DataLabel="Razon social">
+            <MudText Typo="Typo.body2"><b>@context.RazonSocial</b></MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Direccion</MudText>
+        </MudTd>
+        <MudTd DataLabel="Region">@context.Region</MudTd>
+        <MudTd DataLabel="Ciudad">@context.Ciudad</MudTd>
+        <MudTd DataLabel="Telefono">@context.Telefono</MudTd>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Size="Size.Small" OnClick="@(() => EditarCliente(context))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => EliminarCliente(context))" />
+        </MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private List<Cliente> _clientes = new();
+    private bool _loading = true;
+    private string _busqueda = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarClientes();
+    }
+
+    private async Task CargarClientes()
+    {
+        _loading = true;
+        _clientes = await ClienteService.ObtenerTodos();
+        _loading = false;
+    }
+
+    private async Task Buscar()
+    {
+        _loading = true;
+        _clientes = await ClienteService.Buscar(_busqueda);
+        _loading = false;
+    }
+
+    private async Task BuscarConEnter(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await Buscar();
+        }
+    }
+
+    private async Task CrearCliente()
+    {
+        await AbrirDialogo(new Cliente());
+    }
+
+    private async Task EditarCliente(Cliente cliente)
+    {
+        await AbrirDialogo(new Cliente
+        {
+            Id = cliente.Id,
+            Rut = cliente.Rut,
+            RazonSocial = cliente.RazonSocial,
+            Direccion = cliente.Direccion,
+            Region = cliente.Region,
+            Comuna = cliente.Comuna,
+            Ciudad = cliente.Ciudad,
+            TipoCliente = cliente.TipoCliente,
+            Sucursal = cliente.Sucursal,
+            Vendedor = cliente.Vendedor,
+            Email = cliente.Email,
+            Telefono = cliente.Telefono
+        });
+    }
+
+    private async Task AbrirDialogo(Cliente cliente)
+    {
+        var parameters = new DialogParameters<DialogCliente> { { x => x.Cliente, cliente } };
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<DialogCliente>("Cliente", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false })
+        {
+            Snackbar.Add("Cliente guardado", Severity.Success);
+            await Buscar();
+        }
+    }
+
+    private async Task EliminarCliente(Cliente cliente)
+    {
+        var primeraConfirmacion = await Confirmar(
+            "Eliminar cliente",
+            $"Desea eliminar el cliente {cliente.RazonSocial}?");
+
+        if (!primeraConfirmacion)
+        {
+            return;
+        }
+
+        var segundaConfirmacion = await Confirmar(
+            "Confirmacion final",
+            $"Esta accion eliminara definitivamente {cliente.RazonSocial}, pero mantendra sus cotizaciones historicas sin cliente asociado. Desea continuar?");
+
+        if (!segundaConfirmacion)
+        {
+            return;
+        }
+
+        try
+        {
+            await ClienteService.Eliminar(cliente.Id);
+            Snackbar.Add("Cliente eliminado. Sus cotizaciones historicas se mantienen.", Severity.Success);
+            await Buscar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task<bool> Confirmar(string titulo, string mensaje)
+    {
+        var parameters = new DialogParameters<DialogConfirmar>
+        {
+            { x => x.Titulo, titulo },
+            { x => x.Mensaje, mensaje },
+            { x => x.TextoConfirmar, "Eliminar" }
+        };
+        var dialog = await DialogService.ShowAsync<DialogConfirmar>("Confirmar", parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false } && result.Data is true;
+    }
+}

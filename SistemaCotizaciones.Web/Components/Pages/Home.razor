@@ -1,0 +1,86 @@
+@page "/"
+@attribute [Authorize]
+@inject DashboardService DashboardService
+
+<PageTitle>JAH - Inicio</PageTitle>
+
+<div class="page-header">
+    <div>
+        <MudText Typo="Typo.h4">Inicio</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Resumen comercial de cotizaciones emitidas y aprobadas.</MudText>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" sm="6" lg="4">
+            <MudPaper Class="metric-card" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Description" Color="Color.Primary" />
+                <MudText Typo="Typo.caption">Cotizaciones emitidas</MudText>
+                <MudText Typo="Typo.h4">@_resumen.TotalCotizacionesEmitidas</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="4">
+            <MudPaper Class="metric-card" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Color="Color.Primary" />
+                <MudText Typo="Typo.caption">Monto total cotizado</MudText>
+                <MudText Typo="Typo.h4">@Moneda(_resumen.MontoTotalCotizado)</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="4">
+            <MudPaper Class="metric-card" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Primary" />
+                <MudText Typo="Typo.caption">IVA generado</MudText>
+                <MudText Typo="Typo.h4">@Moneda(_resumen.TotalIvaGenerado)</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="4">
+            <MudPaper Class="metric-card success" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                <MudText Typo="Typo.caption">Cotizaciones aprobadas</MudText>
+                <MudText Typo="Typo.h4">@_resumen.TotalCotizacionesAceptadas</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="4">
+            <MudPaper Class="metric-card success" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Paid" Color="Color.Success" />
+                <MudText Typo="Typo.caption">Monto aprobado</MudText>
+                <MudText Typo="Typo.h4">@Moneda(_resumen.MontoTotalAceptado)</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" lg="4">
+            <MudPaper Class="metric-card success" Elevation="0">
+                <MudIcon Icon="@Icons.Material.Filled.Percent" Color="Color.Success" />
+                <MudText Typo="Typo.caption">IVA aprobado</MudText>
+                <MudText Typo="Typo.h4">@Moneda(_resumen.IvaTotalAceptado)</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudGrid Class="mt-5">
+        <MudItem xs="12" md="6">
+            <RankingCard Titulo="Clientes con mas cotizaciones" Items="_resumen.ClientesConMasCotizaciones" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <RankingCard Titulo="Clientes con mas aprobadas" Items="_resumen.ClientesConMasAprobadas" />
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private DashboardResumen _resumen = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _resumen = await DashboardService.ObtenerResumen();
+        _loading = false;
+    }
+
+    private static string Moneda(decimal valor) => valor.ToString("C0", new System.Globalization.CultureInfo("es-CL"));
+}

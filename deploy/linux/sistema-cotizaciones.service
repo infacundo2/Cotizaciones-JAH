@@ -1,0 +1,21 @@
+[Unit]
+Description=Sistema Cotizaciones JAH
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/sistema-cotizaciones
+ExecStart=/usr/bin/dotnet /opt/sistema-cotizaciones/SistemaCotizaciones.Web.dll
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=sistema-cotizaciones
+User=www-data
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5082
+
+# Set these with systemctl edit sistema-cotizaciones instead of committing secrets:
+# Environment=ConnectionStrings__DefaultConnection=Server=127.0.0.1;Port=3306;Database=db_cotizaciones;Uid=user_cotiza;Pwd=CHANGE_ME;SslMode=None;AllowPublicKeyRetrieval=True;
+# Environment=SeedAdmin__Password=CHANGE_ME
+
+[Install]
+WantedBy=multi-user.target

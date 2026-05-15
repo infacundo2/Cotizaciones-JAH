@@ -1,0 +1,136 @@
+@using MudBlazor
+@inject ClienteService ClienteService
+@inject ChileGeoService ChileGeoService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@((Cliente.Id == 0) ? "Nuevo Cliente" : "Editar Cliente")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="Cliente.Rut" Label="RUT" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="Cliente.RazonSocial" Label="Razón Social" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Cliente.Direccion" Label="Dirección" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudAutocomplete T="string"
+                                 Value="Cliente.Region"
+                                 ValueChanged="RegionChanged"
+                                 SearchFunc="BuscarRegiones"
+                                 Label="Region"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Dense="true"
+                                 CoerceText="true"
+                                 MaxItems="80" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudAutocomplete T="string"
+                                 Value="Cliente.Comuna"
+                                 ValueChanged="ComunaChanged"
+                                 SearchFunc="BuscarComunas"
+                                 Label="Comuna"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Dense="true"
+                                 CoerceText="true"
+                                 MaxItems="80" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudAutocomplete T="string"
+                                 @bind-Value="Cliente.Ciudad"
+                                 SearchFunc="BuscarCiudades"
+                                 Label="Ciudad"
+                                 Variant="Variant.Outlined"
+                                 Margin="Margin.Dense"
+                                 Dense="true"
+                                 CoerceText="true"
+                                 MaxItems="80" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="Cliente.TipoCliente" Label="Tipo cliente" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="Cliente.Sucursal" Label="Sucursal" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="Cliente.Vendedor" Label="Vendedor" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="Cliente.Email" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="Cliente.Telefono" Label="Teléfono" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit">Guardar Cliente</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Cliente Cliente { get; set; } = new();
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private Task<IEnumerable<string>> BuscarRegiones(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ChileGeoService.BuscarRegiones(value));
+    }
+
+    private Task<IEnumerable<string>> BuscarComunas(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ChileGeoService.BuscarComunas(Cliente.Region, value));
+    }
+
+    private Task<IEnumerable<string>> BuscarCiudades(string value, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(ChileGeoService.BuscarCiudades(Cliente.Region, Cliente.Comuna, value));
+    }
+
+    private Task RegionChanged(string? region)
+    {
+        Cliente.Region = region ?? string.Empty;
+        if (!ChileGeoService.ComunaPerteneceARegion(Cliente.Region, Cliente.Comuna))
+        {
+            Cliente.Comuna = string.Empty;
+            Cliente.Ciudad = string.Empty;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task ComunaChanged(string? comuna)
+    {
+        Cliente.Comuna = comuna ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(Cliente.Comuna))
+        {
+            Cliente.Ciudad = Cliente.Comuna;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(Cliente.RazonSocial))
+        {
+            Snackbar.Add("La Razón Social es obligatoria", Severity.Warning);
+            return;
+        }
+
+        await ClienteService.Guardar(Cliente);
+        Snackbar.Add("Cliente guardado correctamente", Severity.Success);
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

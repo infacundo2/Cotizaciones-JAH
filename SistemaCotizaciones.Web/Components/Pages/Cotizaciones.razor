@@ -1,0 +1,336 @@
+@page "/cotizaciones"
+@attribute [Authorize]
+@inject CotizacionService CotizacionService
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@using SistemaCotizaciones.Web.Components.Pages.Dialogs
+
+<PageTitle>JAH - Cotizaciones emitidas</PageTitle>
+
+<div class="page-header">
+    <div>
+        <MudText Typo="Typo.h4">Cotizaciones emitidas</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Lista compacta por cotizacion principal. Expande para ver versiones.</MudText>
+    </div>
+</div>
+
+<MudPaper Class="toolbar-surface" Elevation="0">
+    <MudTextField @bind-Value="_busqueda"
+                  Placeholder="Buscar por numero base, version, cliente o monto aproximado"
+                  Variant="Variant.Outlined"
+                  Margin="Margin.Dense"
+                  Adornment="Adornment.Start"
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  OnKeyDown="BuscarConEnter" />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="BuscarDesdeInicio">Buscar</MudButton>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_cotizaciones.Count == 0)
+{
+    <MudPaper Class="section-surface" Elevation="0">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">No hay cotizaciones para mostrar.</MudText>
+    </MudPaper>
+}
+else
+{
+    <div class="compact-quote-list">
+        @foreach (var cotizacion in _cotizaciones)
+        {
+            var ultima = cotizacion.Versiones.OrderByDescending(x => x.Version).FirstOrDefault();
+            var aprobada = cotizacion.Versiones.FirstOrDefault(x => x.EsAprobada);
+            var expandida = _expandidaId == cotizacion.Id;
+
+            <MudPaper Class="compact-quote" Elevation="0">
+                <button type="button" class="compact-quote-header" @onclick="@(() => Alternar(cotizacion.Id))">
+                    <div class="compact-quote-title">
+                        <MudIcon Icon="@(expandida ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Color="Color.Primary" />
+                        <div>
+                            <MudText Typo="Typo.h6">@cotizacion.NumeroBase</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@NombreCliente(cotizacion)</MudText>
+                        </div>
+                    </div>
+                    <div class="compact-quote-summary">
+                        <MudChip T="string" Color="@(aprobada is not null ? Color.Success : Color.Warning)" Variant="Variant.Filled" Size="Size.Small">
+                            @(aprobada is not null ? $"Aprobada {aprobada.NumeroCotizacion}" : "Pendiente")
+                        </MudChip>
+                        @if (ultima is not null)
+                        {
+                            <span>@ultima.NumeroCotizacion</span>
+                            <strong>@Moneda(ultima.Total)</strong>
+                        }
+                    </div>
+                </button>
+
+                @if (expandida)
+                {
+                    <div class="compact-quote-body">
+                        <div class="quote-detail-toolbar">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Versiones disponibles: @cotizacion.Versiones.Count
+                            </MudText>
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Delete"
+                                       OnClick="@(() => EliminarCotizacion(cotizacion.Id, cotizacion.NumeroBase))">
+                                Eliminar cotizacion
+                            </MudButton>
+                        </div>
+
+                        <MudTable Items="cotizacion.Versiones.OrderByDescending(x => x.Version)" Dense="true" Hover="true" Class="data-table mt-3">
+                            <HeaderContent>
+                                <MudTh>Version</MudTh>
+                                <MudTh>Fecha</MudTh>
+                                <MudTh>Estado</MudTh>
+                                <MudTh>Total</MudTh>
+                                <MudTh>PDF</MudTh>
+                                <MudTh>Aprobacion</MudTh>
+                                <MudTh>Acciones</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Version">
+                                    <MudText Typo="Typo.body2"><b>@context.NumeroCotizacion</b></MudText>
+                                </MudTd>
+                                <MudTd DataLabel="Fecha">@context.FechaEmision.ToLocalTime().ToString("dd-MM-yyyy")</MudTd>
+                                <MudTd DataLabel="Estado">
+                                    <MudChip T="string" Color="@ColorEstado(context)" Variant="Variant.Filled" Size="Size.Small">@TextoEstado(context)</MudChip>
+                                </MudTd>
+                                <MudTd DataLabel="Total">@Moneda(context.Total)</MudTd>
+                                <MudTd DataLabel="PDF">
+                                    @if (!string.IsNullOrWhiteSpace(context.PdfPath))
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf" Color="Color.Error" Href="@context.PdfPath" Target="_blank" />
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="Aprobacion">
+                                    @if (context.EsAprobada)
+                                    {
+                                        <MudButton Variant="Variant.Text" Color="Color.Warning" Size="Size.Small" OnClick="@(() => QuitarAprobacion(context.Id))">Quitar</MudButton>
+                                    }
+                                    else if (context.Estado == EstadoCotizacion.Borrador)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Borrador</MudText>
+                                    }
+                                    else
+                                    {
+                                        <MudButton Variant="Variant.Text" Color="Color.Success" Size="Size.Small" OnClick="@(() => Aprobar(context.Id))">Aprobar</MudButton>
+                                    }
+                                </MudTd>
+                                <MudTd DataLabel="Acciones">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                   Color="Color.Primary"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => Editar(context.Id))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Color="Color.Error"
+                                                   Size="Size.Small"
+                                                   OnClick="@(() => EliminarVersion(context.Id, context.NumeroCotizacion))" />
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </div>
+                }
+            </MudPaper>
+        }
+    </div>
+
+    <MudPaper Class="pagination-bar" Elevation="0">
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Pagina @_pagina de @_totalPaginas | @_totalRegistros registros
+        </MudText>
+        <div class="pagination-actions">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(_pagina <= 1)" OnClick="PaginaAnterior">Anterior</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="@(_pagina >= _totalPaginas)" OnClick="PaginaSiguiente">Siguiente</MudButton>
+        </div>
+    </MudPaper>
+}
+
+@code {
+    private const int TamanioPagina = 20;
+    private List<Cotizacion> _cotizaciones = new();
+    private bool _loading = true;
+    private string _busqueda = string.Empty;
+    private int _pagina = 1;
+    private int _totalPaginas = 1;
+    private int _totalRegistros;
+    private int? _expandidaId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Buscar();
+    }
+
+    private async Task Buscar()
+    {
+        _loading = true;
+        var resultado = await CotizacionService.ObtenerAgrupadas(_busqueda, _pagina, TamanioPagina);
+        _cotizaciones = resultado.Items;
+        _totalPaginas = resultado.TotalPaginas;
+        _totalRegistros = resultado.TotalRegistros;
+        _loading = false;
+    }
+
+    private async Task BuscarDesdeInicio()
+    {
+        _pagina = 1;
+        _expandidaId = null;
+        await Buscar();
+    }
+
+    private async Task BuscarConEnter(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await BuscarDesdeInicio();
+        }
+    }
+
+    private void Alternar(int cotizacionId)
+    {
+        _expandidaId = _expandidaId == cotizacionId ? null : cotizacionId;
+    }
+
+    private async Task PaginaAnterior()
+    {
+        if (_pagina <= 1)
+        {
+            return;
+        }
+
+        _pagina--;
+        _expandidaId = null;
+        await Buscar();
+    }
+
+    private async Task PaginaSiguiente()
+    {
+        if (_pagina >= _totalPaginas)
+        {
+            return;
+        }
+
+        _pagina++;
+        _expandidaId = null;
+        await Buscar();
+    }
+
+    private async Task Aprobar(int id)
+    {
+        try
+        {
+            await CotizacionService.Aprobar(id);
+            Snackbar.Add("Cotizacion aprobada.", Severity.Success);
+            await Buscar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task QuitarAprobacion(int id)
+    {
+        await CotizacionService.QuitarAprobacion(id);
+        Snackbar.Add("Aprobacion quitada.", Severity.Info);
+        await Buscar();
+    }
+
+    private void Editar(int id)
+    {
+        NavigationManager.NavigateTo($"/cotizaciones/editar/{id}");
+    }
+
+    private async Task EliminarCotizacion(int id, string numeroBase)
+    {
+        var confirmado = await Confirmar(
+            "Eliminar cotizacion",
+            $"Desea eliminar la cotizacion {numeroBase} completa, con todas sus versiones y PDFs?");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            await CotizacionService.EliminarCotizacion(id);
+            Snackbar.Add($"Cotizacion {numeroBase} eliminada.", Severity.Success);
+            _expandidaId = null;
+            await Buscar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task EliminarVersion(int id, string numeroCotizacion)
+    {
+        var confirmado = await Confirmar(
+            "Eliminar version",
+            $"Desea eliminar la version {numeroCotizacion}? Si es la unica version, se eliminara la cotizacion completa.");
+
+        if (!confirmado)
+        {
+            return;
+        }
+
+        try
+        {
+            await CotizacionService.EliminarVersion(id);
+            Snackbar.Add($"Version {numeroCotizacion} eliminada.", Severity.Success);
+            await Buscar();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task<bool> Confirmar(string titulo, string mensaje)
+    {
+        var parameters = new DialogParameters<DialogConfirmar>
+        {
+            { x => x.Titulo, titulo },
+            { x => x.Mensaje, mensaje },
+            { x => x.TextoConfirmar, "Eliminar" }
+        };
+        var dialog = await DialogService.ShowAsync<DialogConfirmar>("Confirmar", parameters);
+        var result = await dialog.Result;
+        return result is { Canceled: false } && result.Data is true;
+    }
+
+    private static Color ColorEstado(CotizacionVersion version)
+    {
+        return version.Estado switch
+        {
+            EstadoCotizacion.Aprobada => Color.Success,
+            EstadoCotizacion.Rechazada => Color.Error,
+            EstadoCotizacion.Borrador => Color.Info,
+            _ => Color.Warning
+        };
+    }
+
+    private static string TextoEstado(CotizacionVersion version)
+    {
+        return version.Estado switch
+        {
+            EstadoCotizacion.Aprobada => "Aprobada",
+            EstadoCotizacion.Rechazada => "Rechazada",
+            EstadoCotizacion.Borrador => "Borrador",
+            _ => "Pendiente"
+        };
+    }
+
+    private static string Moneda(decimal valor) => valor.ToString("C0", new System.Globalization.CultureInfo("es-CL"));
+
+    private static string NombreCliente(Cotizacion cotizacion)
+    {
+        return cotizacion.Cliente?.RazonSocial ?? "Cliente eliminado";
+    }
+}

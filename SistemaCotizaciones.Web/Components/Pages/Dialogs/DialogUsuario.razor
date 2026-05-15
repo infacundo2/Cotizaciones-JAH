@@ -1,0 +1,112 @@
+@using MudBlazor
+@using System.Net.Mail
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@((Usuario.EsNuevo) ? "Nuevo usuario" : "Editar usuario")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Usuario.NombreCompleto"
+                              Label="Nombre completo"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Required="true" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Usuario.UserName"
+                              Label="Usuario"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Required="true"
+                              HelperText="Puedes iniciar sesion con este usuario o con el email."
+                              Error="@_usuarioInvalido"
+                              ErrorText="Ingrese un nombre de usuario sin espacios." />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Usuario.Email"
+                              Label="Email"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              InputType="InputType.Email"
+                              Required="true"
+                              Error="@_emailInvalido"
+                              ErrorText="Ingrese un email valido, por ejemplo usuario@dominio.cl" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Usuario.Telefono"
+                              Label="Telefono vendedor"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect @bind-Value="Usuario.Rol" Label="Rol" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    <MudSelectItem Value="@IdentitySeeder.RolVendedor">Vendedor</MudSelectItem>
+                    <MudSelectItem Value="@IdentitySeeder.RolAdmin">Admin</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" Class="d-flex align-center">
+                <MudSwitch @bind-Value="Usuario.Activo" Color="Color.Success" Label="Usuario activo" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="Usuario.Password"
+                              Label="@((Usuario.EsNuevo) ? "Clave inicial" : "Nueva clave (opcional)")"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              InputType="InputType.Password"
+                              HelperText="Minimo 8 caracteres, con al menos una letra minuscula y un numero." />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancelar">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Guardar">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = default!;
+    [Parameter] public UsuarioEditor Usuario { get; set; } = new();
+    private bool _emailInvalido;
+    private bool _usuarioInvalido;
+
+    private void Cancelar() => MudDialog.Cancel();
+
+    private void Guardar()
+    {
+        _usuarioInvalido = !UsuarioValido(Usuario.UserName);
+        _emailInvalido = !EmailValido(Usuario.Email);
+        if (_usuarioInvalido || _emailInvalido)
+        {
+            return;
+        }
+
+        Usuario.UserName = Usuario.UserName.Trim();
+        Usuario.Email = Usuario.Email.Trim();
+        MudDialog.Close(DialogResult.Ok(Usuario));
+    }
+
+    private static bool UsuarioValido(string userName)
+    {
+        return !string.IsNullOrWhiteSpace(userName) && !userName.Any(char.IsWhiteSpace);
+    }
+
+    private static bool EmailValido(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return false;
+        }
+
+        try
+        {
+            var address = new MailAddress(email.Trim());
+            return address.Address == email.Trim();
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}

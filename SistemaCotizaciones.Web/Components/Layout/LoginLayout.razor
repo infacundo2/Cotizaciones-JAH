@@ -1,0 +1,23 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<main class="login-page">
+    @Body
+</main>
+
+@code {
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#0f5f7a",
+            Secondary = "#0f9f8f",
+            Background = "#eef6f8",
+            Surface = "#ffffff"
+        }
+    };
+}

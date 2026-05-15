@@ -1,0 +1,75 @@
+@inherits LayoutComponentBase
+@inject UsuarioActualService UsuarioActualService
+
+<MudThemeProvider Theme="_currentTheme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout Class="app-layout">
+    <MudAppBar Elevation="1" Color="Color.Surface" Class="app-bar">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <img src="img/logo-jah.png" alt="JAH Mantencion" class="app-logo" />
+        <MudText Typo="Typo.h6" Class="ml-3 app-title">JAH Cotizaciones</MudText>
+        <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <MudChip T="string" Variant="Variant.Outlined" Color="Color.Primary" Icon="@Icons.Material.Filled.AccountCircle" Class="user-chip">@_usuario.Nombre</MudChip>
+                <form method="post" action="/auth/logout" class="logout-form">
+                    <MudIconButton ButtonType="ButtonType.Submit" Icon="@Icons.Material.Filled.Logout" Color="Color.Primary" />
+                </form>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+    <MudDrawer @bind-Open="_drawerOpen"
+               Elevation="2"
+               Variant="@DrawerVariant.Responsive"
+               ClipMode="DrawerClipMode.Docked"
+               Class="app-drawer">
+        <MudNavMenu>
+            <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="ml-4 mt-3">SISTEMA</MudText>
+            <MudNavLink Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" href="/">Inicio</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.AddBusiness" href="/nueva-cotizacion">Nueva Cotizacion</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.History" href="/cotizaciones">Cotizaciones Emitidas</MudNavLink>
+            <MudNavLink Icon="@Icons.Material.Filled.People" href="/clientes">Clientes</MudNavLink>
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <MudNavLink Icon="@Icons.Material.Filled.ManageAccounts" href="/usuarios">Usuarios</MudNavLink>
+                </Authorized>
+            </AuthorizeView>
+        </MudNavMenu>
+    </MudDrawer>
+    <MudMainContent Class="main-content">
+        <div class="content-shell">
+            @Body
+        </div>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private UsuarioActual _usuario = UsuarioActual.Anonimo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _usuario = await UsuarioActualService.Obtener();
+    }
+
+    private void DrawerToggle() => _drawerOpen = !_drawerOpen;
+
+    private readonly MudTheme _currentTheme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#0f5f7a",
+            Secondary = "#0f9f8f",
+            AppbarBackground = "#ffffff",
+            Background = "#eef6f8",
+            Surface = "#ffffff",
+            Success = "#1f8f4d",
+            Warning = "#f2a516",
+            Error = "#c63d3d",
+            Info = "#2374ab"
+        }
+    };
+}
